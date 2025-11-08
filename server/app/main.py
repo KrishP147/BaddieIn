@@ -4,6 +4,8 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.routers import phantombuster
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -24,6 +26,9 @@ app.add_middleware(
   allow_methods=["*"],
   allow_headers=["*"]
 )
+
+# Include routers
+app.include_router(phantombuster.router)
 
 
 @app.get("/health")

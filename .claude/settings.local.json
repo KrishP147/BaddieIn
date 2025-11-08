@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(waterloo_data.json)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
