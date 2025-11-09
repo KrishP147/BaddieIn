@@ -197,6 +197,7 @@ const ProfileCard = () => {
           className="absolute w-full h-full backface-hidden rounded-3xl overflow-hidden shadow-2xl border-2 border-white/20"
           style={{ backfaceVisibility: 'hidden' }}
         >
+          Hello this is a test
           {/* Card content */}
           <div className="relative h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
             {/* Profile Image */}
