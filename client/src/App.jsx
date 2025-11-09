@@ -359,7 +359,8 @@ function DatingLandingPage({
       'UBC',
       'UWaterloo',
       'NYU',
-      'Stanford'
+      'Stanford',
+      'McMaster'
       ]
     },
     {
@@ -549,7 +550,7 @@ function DatingLandingPage({
         genderQueries.map(async (genderOption) => {
           const url = `${apiBaseUrl}/phantombuster/search-cache?query=${encodeURIComponent(
             cityQuery
-          )}&gender=${genderOption}`;
+          )}&gender=${genderOption}&limit=1000`;
           console.log(`🌐 Fetching pack for school: ${cityQuery}, gender: ${genderOption}`);
           const response = await fetch(url);
           if (!response.ok) {
@@ -1410,7 +1411,7 @@ export default function App() {
         genderQueries.map(async (genderOption) => {
           const url = `${apiBaseUrl}/phantombuster/search-cache?query=${encodeURIComponent(
             cityQuery
-          )}&gender=${genderOption}`;
+          )}&gender=${genderOption}&limit=1000`;
           console.log(`🌐 Fetching pack for school: ${cityQuery}, gender: ${genderOption}`);
           const response = await fetch(url);
           if (!response.ok) {

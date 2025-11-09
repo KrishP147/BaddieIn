@@ -243,9 +243,9 @@ const MessageComposer = ({ rosterCards }) => {
                     </button>
                   </div>
 
-                  <div className="bg-gradient-to-r from-yellow-500/10 to-pink-500/10 border border-yellow-500/30 p-4 rounded-xl">
-                    <p className="text-yellow-200 text-sm">
-                      💡 <strong>Tip:</strong> Personalize this message before sending! Add specific details or adjust the tone to match your style.
+                  <div className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/30 p-4 rounded-xl">
+                    <p className="text-green-200 text-sm">
+                      ✅ <strong>Ready to send!</strong> This is a complete message that you can copy and send right away. No editing needed!
                     </p>
                   </div>
                 </div>

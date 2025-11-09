@@ -839,7 +839,8 @@ const PackOpening = ({
     'UBC',
     'UWaterloo',
     'NYU',
-    'Stanford'
+    'Stanford',
+    'McMaster'
   ];
 
   const cardsPool = useMemo(() => {
