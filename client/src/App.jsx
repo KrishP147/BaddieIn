@@ -85,7 +85,7 @@ const CustomDropdown = ({ value, options, onChange, placeholder = 'Select an opt
                   key={idx}
                   type="button"
                   onClick={() => handleSelect(option)}
-                  className={`w-full text-left px-4 py-3 text-base text-white hover:bg-white/10 transition-colors duration-200 ${
+                  className={`w-full text-left px-4 py-3 text-base text-white hover:bg-white/10 transition-colors duration-200 cursor-pointer ${
                     value === option ? 'bg-white/15' : ''
                   }`}
                   style={{
@@ -319,7 +319,9 @@ function DatingLandingPage({
   onSurveyComplete,
   onGenderPreferenceSet,
   onFetchNewPack = null,
-  genderPreference = null
+  genderPreference = null,
+  onSwitchToPackTab = null,
+  setCurrentSchoolForPack = null
 }) {
   const [mousePosition, setMousePosition] = useState({ x: 50, y: 50 });
   const [surveyStarted, setSurveyStarted] = useState(false);
@@ -331,6 +333,7 @@ function DatingLandingPage({
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [slideDirection, setSlideDirection] = useState('forward'); // 'forward' or 'backward'
   const [isFetchingPack, setIsFetchingPack] = useState(false);
+  const [isCompletingSurvey, setIsCompletingSurvey] = useState(false);
 
   const questions = [
     {
@@ -347,18 +350,16 @@ function DatingLandingPage({
     },
     {
       id: 'school',
-    question: 'Which city do you prefer?',
+    question: 'Which school do you prefer?',
       type: 'dropdown',
       options: [
-      'Toronto',
-      'Ottawa',
-      'New York',
-      'San Francisco',
-      'London',
-      'Montreal',
-      'Waterloo',
-      'Guelph',
-      'Kingston'
+      'UC Irvine',
+      'UC Riverside',
+      'UCLA',
+      'UBC',
+      'UWaterloo',
+      'NYU',
+      'Stanford'
       ]
     },
     {
@@ -370,21 +371,35 @@ function DatingLandingPage({
   ];
 
   const completeSurvey = useCallback(async (finalAnswers) => {
+    console.log('🎯 completeSurvey called with answers:', finalAnswers);
+    console.log('🔍 All answer keys:', Object.keys(finalAnswers));
+    console.log('🔍 All answer values:', Object.values(finalAnswers));
+    
     const cityRaw = finalAnswers['school'];
     const genderSelection = finalAnswers['gender'];
 
+    console.log('🔍 Extracted values:', { cityRaw, genderSelection, cityRawType: typeof cityRaw, genderSelectionType: typeof genderSelection });
+
     if (!cityRaw || !genderSelection) {
-      console.warn('Missing city or gender selection; falling back to default pack.', {
-        cityRaw,
-        genderSelection
-      });
-      onPackFetchError?.('Please provide both a city preference and a gender preference.');
+      const missingFields = [];
+      if (!cityRaw) missingFields.push('school');
+      if (!genderSelection) missingFields.push('gender');
+      
+      console.warn('❌ Missing required fields:', missingFields);
+      console.warn('❌ All answers received:', finalAnswers);
+      console.warn('❌ Current question index:', currentQuestion);
+      console.warn('❌ Questions:', questions.map((q, i) => `${i}: ${q.id}`));
+      
+      onPackFetchError?.(`Please provide both a school preference and a gender preference. Missing: ${missingFields.join(', ')}`);
       onPackCardsGenerated?.([]);
       setShowPackOpening(true);
+      onSwitchToPackTab?.();
       return;
     }
 
     const normalizedGender = genderSelection.toLowerCase();
+    console.log('🔍 Gender selection:', { original: genderSelection, normalized: normalizedGender });
+    
     const genderQueries =
       normalizedGender === 'both'
         ? ['man', 'woman']
@@ -394,9 +409,11 @@ function DatingLandingPage({
             ? ['woman']
             : [];
 
+    console.log('🔍 Gender queries:', genderQueries);
+
     if (!genderQueries.length) {
       const message = `Unsupported gender selection "${genderSelection}".`;
-      console.warn(message);
+      console.warn('❌', message);
       onPackFetchError?.(message);
       onPackCardsGenerated?.([]);
       setShowPackOpening(true);
@@ -408,6 +425,9 @@ function DatingLandingPage({
 
     const originalCity = cityRaw.trim();
     const cityQuery = originalCity.toLowerCase();
+    
+    // Store the current school for delete operations
+    setCurrentSchoolForPack?.(originalCity);
 
     const mapRowToCard = (row, index, genderOption) => {
       if (!row || typeof row !== 'object') {
@@ -521,17 +541,28 @@ function DatingLandingPage({
     onPackFetchError?.(null);
 
     try {
+      // Get API base URL
+      const rawApiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      const apiBaseUrl = rawApiBase.replace(/\/$/, '');
+      
       const results = await Promise.all(
         genderQueries.map(async (genderOption) => {
-          const url = `http://127.0.0.1:8000/phantombuster/search-cache?query=${encodeURIComponent(
+          const url = `${apiBaseUrl}/phantombuster/search-cache?query=${encodeURIComponent(
             cityQuery
           )}&gender=${genderOption}`;
+          console.log(`🌐 Fetching pack for school: ${cityQuery}, gender: ${genderOption}`);
           const response = await fetch(url);
           if (!response.ok) {
-            throw new Error(`Request failed with status ${response.status}`);
+            const errorText = await response.text();
+            console.error(`❌ API Error (${response.status}):`, errorText);
+            throw new Error(`Request failed with status ${response.status}: ${errorText}`);
           }
           const data = await response.json();
-          console.log(`[PhantomBuster] city="${cityQuery}" gender="${genderOption}"`, data);
+          console.log(`✅ [PhantomBuster] city="${cityQuery}" gender="${genderOption}"`, {
+            rowCount: data?.csv_row_count || 0,
+            totalRows: data?.total_csv_row_count || 0,
+            cached: data?.cached || false
+          });
           return { gender: genderOption, data };
         })
       );
@@ -569,29 +600,50 @@ function DatingLandingPage({
       console.log(`✅ Pack generation complete: ${aggregatedCards.length} cards (filtered out ${rosterNames.size} roster members)`);
 
       if (!aggregatedCards.length) {
-        throw new Error('No LinkedIn profiles returned for this search.');
+        const errorMsg = 'No LinkedIn profiles returned for this search. Please try a different school or check back later.';
+        console.error('❌', errorMsg);
+        throw new Error(errorMsg);
       }
 
+      console.log('✅ Setting pack cards and completing survey...');
       onPackCardsGenerated?.(aggregatedCards);
       try {
         localStorage.removeItem('daily-pack-claimed');
+        localStorage.setItem('survey-completed', 'true');
+        console.log('✅ Survey completion saved to localStorage');
+      } catch (err) {
+        console.error('⚠️ Failed to save survey completion:', err);
+        // ignore storage errors
+      }
+      console.log('✅ Calling onSurveyComplete callback...');
+      onSurveyComplete?.();
+      setShowPackOpening(true);
+      // Switch to pack tab after survey completion
+      onSwitchToPackTab?.();
+      console.log('✅ Survey complete! Switched to pack tab. Pack opening should be visible now.');
+    } catch (error) {
+      console.error('❌ Error fetching PhantomBuster search cache:', error);
+      const message =
+        error instanceof Error ? error.message : 'Unable to load search results.';
+      console.error('❌ Error message:', message);
+      onPackFetchError?.(message);
+      onPackCardsGenerated?.([]);
+      // Still mark survey as complete and show pack opening even on error
+      // so user can see the error message
+      try {
         localStorage.setItem('survey-completed', 'true');
       } catch {
         // ignore storage errors
       }
       onSurveyComplete?.();
       setShowPackOpening(true);
-    } catch (error) {
-      console.error('Error fetching PhantomBuster search cache:', error);
-      const message =
-        error instanceof Error ? error.message : 'Unable to load search results.';
-      onPackFetchError?.(message);
-      onPackCardsGenerated?.([]);
-      setShowPackOpening(true);
+      onSwitchToPackTab?.();
+      console.log('⚠️ Survey completed with errors, pack opening shown with error message');
     } finally {
       setIsFetchingPack(false);
+      console.log('✅ Fetch complete, isFetchingPack set to false');
     }
-  }, [onPackCardsGenerated, onPackFetchError, onSurveyComplete, onGenderPreferenceSet]);
+  }, [onPackCardsGenerated, onPackFetchError, onSurveyComplete, onGenderPreferenceSet, onSwitchToPackTab, setCurrentSchoolForPack]);
 
   const handleStartSurvey = () => {
     setShowSurvey(true); // Render survey in DOM first (at opacity-0)
@@ -602,16 +654,26 @@ function DatingLandingPage({
   };
 
   const handleAnswer = async (option) => {
+    // Prevent double-clicks
+    if (isCompletingSurvey || isTransitioning) {
+      console.log('⏸️ Already processing, ignoring click');
+      return;
+    }
+
     const questionId = questions[currentQuestion].id;
+    console.log(`📝 Answer selected: ${option} for question ${questionId} (index ${currentQuestion})`);
+    
     const updatedAnswers = {
       ...answers,
       [questionId]: option
     };
 
+    console.log('📋 Updated answers:', updatedAnswers);
     setAnswers(updatedAnswers);
 
     // Slide out current question to left, then slide in next question from right
     if (currentQuestion < questions.length - 1) {
+      console.log(`➡️ Moving to next question (${currentQuestion + 1} of ${questions.length})`);
       setIsTransitioning(true);
       setSlideDirection('forward');
       setPrevQuestion(currentQuestion);
@@ -624,8 +686,33 @@ function DatingLandingPage({
       }, 500);
     } else {
       // Survey complete - navigate to pack opening
-      console.log('Survey answers:', updatedAnswers);
-      await completeSurvey(updatedAnswers);
+      console.log('✅ Last question answered! Survey complete.');
+      console.log('📋 All answers before completion:', updatedAnswers);
+      console.log('🔍 Checking required fields...');
+      
+      // Validate all required answers are present
+      const requiredFields = ['industry', 'major', 'school', 'gender'];
+      const missingFields = requiredFields.filter(field => !updatedAnswers[field]);
+      
+      if (missingFields.length > 0) {
+        console.error('❌ Missing required fields:', missingFields);
+        console.error('❌ Current answers:', updatedAnswers);
+        onPackFetchError?.(`Please answer all questions. Missing: ${missingFields.join(', ')}`);
+        return;
+      }
+      
+      console.log('✅ All required fields present. Calling completeSurvey...');
+      setIsCompletingSurvey(true);
+      try {
+        await completeSurvey(updatedAnswers);
+        console.log('✅ completeSurvey finished successfully');
+      } catch (error) {
+        console.error('❌ Error in completeSurvey:', error);
+        // Show error to user
+        onPackFetchError?.(error instanceof Error ? error.message : 'Failed to complete survey');
+      } finally {
+        setIsCompletingSurvey(false);
+      }
     }
   };
 
@@ -638,17 +725,21 @@ function DatingLandingPage({
 
   const handleDropdownChange = (value) => {
     const questionId = questions[currentQuestion].id;
+    console.log(`📝 Dropdown selected: ${value} for question ${questionId} (index ${currentQuestion})`);
+    
     const updatedAnswers = {
       ...answers,
       [questionId]: value
     };
 
+    console.log('📋 Updated answers from dropdown:', updatedAnswers);
     setAnswers(updatedAnswers);
     
     // Auto-advance to next question when dropdown option is selected
     if (value && value !== '') {
       setTimeout(() => {
         if (currentQuestion < questions.length - 1) {
+          console.log(`➡️ Moving to next question from dropdown (${currentQuestion + 1} of ${questions.length})`);
           setIsTransitioning(true);
           setSlideDirection('forward');
           setPrevQuestion(currentQuestion);
@@ -660,8 +751,15 @@ function DatingLandingPage({
           }, 500);
         } else {
           // Survey complete - navigate to pack opening
-          console.log('Survey answers:', updatedAnswers);
-          void completeSurvey(updatedAnswers);
+          console.log('✅ Last question answered via dropdown! Survey complete. Answers:', updatedAnswers);
+          console.log('🚀 Calling completeSurvey from dropdown...');
+          setIsCompletingSurvey(true);
+          completeSurvey(updatedAnswers).catch((error) => {
+            console.error('❌ Error in completeSurvey from dropdown:', error);
+            onPackFetchError?.(error instanceof Error ? error.message : 'Failed to complete survey');
+          }).finally(() => {
+            setIsCompletingSurvey(false);
+          });
         }
       }, 300);
     }
@@ -875,7 +973,7 @@ function DatingLandingPage({
                   {/* Button */}
                   <button 
                     onClick={handleStartSurvey}
-                    className="relative bg-gradient-to-r from-pink-500 via-pink-400 to-pink-500 text-white px-12 py-5 rounded-full text-xl font-semibold transition-all duration-300 shadow-[0_0_20px_rgba(236,72,153,0.6),0_0_40px_rgba(236,72,153,0.4)] hover:shadow-[0_0_30px_rgba(236,72,153,0.8),0_0_60px_rgba(236,72,153,0.6)] hover:scale-105 active:scale-95"
+                    className="relative bg-gradient-to-r from-pink-500 via-pink-400 to-pink-500 text-white px-12 py-5 rounded-full text-xl font-semibold transition-all duration-300 shadow-[0_0_20px_rgba(236,72,153,0.6),0_0_40px_rgba(236,72,153,0.4)] hover:shadow-[0_0_30px_rgba(236,72,153,0.8),0_0_60px_rgba(236,72,153,0.6)] hover:scale-105 active:scale-95 cursor-pointer"
                   >
                     Choose Your Preferences Now
                   </button>
@@ -982,6 +1080,13 @@ function DatingLandingPage({
                     <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-12 drop-shadow-2xl">
                       {questions[currentQuestion].question}
                     </h2>
+                    {/* Loading indicator when completing survey */}
+                    {isCompletingSurvey && (
+                      <div className="mb-8 flex items-center justify-center gap-3 text-white/80">
+                        <div className="w-6 h-6 border-2 border-pink-400 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-lg">Loading your pack...</span>
+                      </div>
+                    )}
 
                     {/* Multiple Choice Options, Text Input, or Dropdown */}
                     {questions[currentQuestion].type === 'text-input' ? (
@@ -1025,7 +1130,12 @@ function DatingLandingPage({
                             <button
                               key={index}
                               onClick={() => handleAnswer(option)}
-                              className={`p-3 rounded-xl text-center transition-all duration-300 transform cursor-pointer ${
+                              disabled={isCompletingSurvey || isTransitioning}
+                              className={`p-3 rounded-xl text-center transition-all duration-300 transform ${
+                                isCompletingSurvey || isTransitioning
+                                  ? 'cursor-not-allowed opacity-50'
+                                  : 'cursor-pointer'
+                              } ${
                                 isSelected
                                   ? 'bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 text-white shadow-lg shadow-pink-500/50 scale-105'
                                   : 'bg-white/5 text-white/80 hover:bg-white/10 hover:text-white border border-white/10 hover:scale-[1.02]'
@@ -1114,6 +1224,7 @@ export default function App() {
   const [likedCards, setLikedCards] = useState([]);
   const [packCards, setPackCards] = useState([]);
   const [packFetchError, setPackFetchError] = useState(null);
+  const [currentSchoolForPack, setCurrentSchoolForPack] = useState(null);
   const [userGenderPreference, setUserGenderPreference] = useState(null); // Store gender preference from survey
   const [surveyCompleted, setSurveyCompleted] = useState(() => {
     try {
@@ -1173,6 +1284,9 @@ export default function App() {
   const fetchNewPackByCity = useCallback(async (city, gender = null) => {
     const cityQuery = city.trim().toLowerCase();
     const originalCity = city.trim();
+    
+    // Update current school when fetching new pack
+    setCurrentSchoolForPack(originalCity);
     
     // Use provided gender or fall back to stored preference, or default to both
     const genderQueries = gender || userGenderPreference || ['man', 'woman'];
@@ -1288,17 +1402,28 @@ export default function App() {
     setPackFetchError(null);
 
     try {
+      // Get API base URL
+      const rawApiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      const apiBaseUrl = rawApiBase.replace(/\/$/, '');
+      
       const results = await Promise.all(
         genderQueries.map(async (genderOption) => {
-          const url = `http://127.0.0.1:8000/phantombuster/search-cache?query=${encodeURIComponent(
+          const url = `${apiBaseUrl}/phantombuster/search-cache?query=${encodeURIComponent(
             cityQuery
           )}&gender=${genderOption}`;
+          console.log(`🌐 Fetching pack for school: ${cityQuery}, gender: ${genderOption}`);
           const response = await fetch(url);
           if (!response.ok) {
-            throw new Error(`Request failed with status ${response.status}`);
+            const errorText = await response.text();
+            console.error(`❌ API Error (${response.status}):`, errorText);
+            throw new Error(`Request failed with status ${response.status}: ${errorText}`);
           }
           const data = await response.json();
-          console.log(`[PhantomBuster] city="${cityQuery}" gender="${genderOption}"`, data);
+          console.log(`✅ [PhantomBuster] city="${cityQuery}" gender="${genderOption}"`, {
+            rowCount: data?.csv_row_count || 0,
+            totalRows: data?.total_csv_row_count || 0,
+            cached: data?.cached || false
+          });
           return { gender: genderOption, data };
         })
       );
@@ -1360,11 +1485,11 @@ export default function App() {
   return (
     <div className="h-screen w-screen bg-black text-white overflow-hidden fixed inset-0">
       {/* Tab Navigation */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-sm border-b border-white/10">
+      <div className="fixed top-0 left-0 right-0 z-[100] bg-black/80 backdrop-blur-sm border-b border-white/10">
         <div className="max-w-7xl mx-auto px-6 py-4 flex gap-4">
           <button
             onClick={() => setActiveTab('home')}
-            className={`px-6 py-3 rounded-full font-semibold transition-all duration-300 ${
+            className={`px-6 py-3 rounded-full font-semibold transition-all duration-300 cursor-pointer ${
               activeTab === 'home'
                 ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg shadow-pink-500/50'
                 : 'bg-white/10 text-white/70 hover:bg-white/20'
@@ -1379,8 +1504,8 @@ export default function App() {
               !surveyCompleted
                 ? 'bg-white/5 text-white/30 cursor-not-allowed opacity-50'
                 : activeTab === 'pack'
-                ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg shadow-pink-500/50'
-                : 'bg-white/10 text-white/70 hover:bg-white/20'
+                ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg shadow-pink-500/50 cursor-pointer'
+                : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'
             }`}
             title={!surveyCompleted ? 'Complete the survey to unlock this tab' : ''}
           >
@@ -1394,8 +1519,8 @@ export default function App() {
               !surveyCompleted
                 ? 'bg-white/5 text-white/30 cursor-not-allowed opacity-50'
                 : activeTab === 'roster'
-                ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg shadow-pink-500/50'
-                : 'bg-white/10 text-white/70 hover:bg-white/20'
+                ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg shadow-pink-500/50 cursor-pointer'
+                : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'
             }`}
             title={!surveyCompleted ? 'Complete the survey to unlock this tab' : ''}
           >
@@ -1414,8 +1539,8 @@ export default function App() {
               !surveyCompleted
                 ? 'bg-white/5 text-white/30 cursor-not-allowed opacity-50'
                 : activeTab === 'messages'
-                ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg shadow-pink-500/50'
-                : 'bg-white/10 text-white/70 hover:bg-white/20'
+                ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg shadow-pink-500/50 cursor-pointer'
+                : 'bg-white/10 text-white/70 hover:bg-white/20 cursor-pointer'
             }`}
             title={!surveyCompleted ? 'Complete the survey to unlock this tab' : ''}
           >
@@ -1438,6 +1563,8 @@ export default function App() {
             onGenderPreferenceSet={setUserGenderPreference}
             onFetchNewPack={fetchNewPackByCity}
             genderPreference={userGenderPreference}
+            onSwitchToPackTab={() => setActiveTab('pack')}
+            setCurrentSchoolForPack={setCurrentSchoolForPack}
           />
         )}
         {surveyCompleted && activeTab === 'pack' && (
@@ -1447,6 +1574,7 @@ export default function App() {
             fetchError={packFetchError}
             onFetchNewPack={fetchNewPackByCity}
             genderPreference={userGenderPreference}
+            currentSchoolName={currentSchoolForPack}
           />
         )}
         {surveyCompleted && activeTab === 'roster' && (

@@ -140,7 +140,7 @@ const MessageComposer = ({ rosterCards }) => {
                   <button
                     key={t.value}
                     onClick={() => setTone(t.value)}
-                    className={`p-4 rounded-xl font-semibold transition-all transform hover:scale-105 ${
+                    className={`p-4 rounded-xl font-semibold transition-all transform hover:scale-105 cursor-pointer ${
                       tone === t.value
                         ? `bg-gradient-to-r ${t.color} text-white shadow-lg scale-105`
                         : 'bg-slate-800/60 text-gray-300 hover:bg-slate-700/60'
@@ -161,7 +161,7 @@ const MessageComposer = ({ rosterCards }) => {
                   <button
                     key={mt.value}
                     onClick={() => setMessageType(mt.value)}
-                    className={`w-full p-4 rounded-xl text-left transition-all ${
+                    className={`w-full p-4 rounded-xl text-left transition-all cursor-pointer ${
                       messageType === mt.value
                         ? 'bg-gradient-to-r from-yellow-500 to-pink-500 text-white shadow-lg'
                         : 'bg-slate-800/60 text-gray-300 hover:bg-slate-700/60'
@@ -192,7 +192,7 @@ const MessageComposer = ({ rosterCards }) => {
               className={`w-full py-4 rounded-xl font-bold text-xl transition-all transform ${
                 loading || !selectedPerson
                   ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600 text-white hover:scale-105 hover:shadow-2xl'
+                  : 'bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600 text-white hover:scale-105 hover:shadow-2xl cursor-pointer'
               }`}
             >
               {loading ? (
@@ -231,13 +231,13 @@ const MessageComposer = ({ rosterCards }) => {
                   <div className="flex gap-3">
                     <button
                       onClick={handleCopyToClipboard}
-                      className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 px-6 rounded-xl font-bold hover:scale-105 transition-transform"
+                      className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 px-6 rounded-xl font-bold hover:scale-105 transition-transform cursor-pointer"
                     >
                       {copied ? '✓ Copied!' : '📋 Copy to Clipboard'}
                     </button>
                     <button
                       onClick={handleGenerateMessage}
-                      className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-3 px-6 rounded-xl font-bold hover:scale-105 transition-transform"
+                      className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-3 px-6 rounded-xl font-bold hover:scale-105 transition-transform cursor-pointer"
                     >
                       🔄 Regenerate
                     </button>

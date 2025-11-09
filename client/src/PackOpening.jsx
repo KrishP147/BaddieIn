@@ -6,6 +6,7 @@ import { FaLinkedin } from 'react-icons/fa';
 const rawApiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 const API_BASE_URL = rawApiBase.replace(/\/$/, '');
 const BEAUTY_SCORE_ENDPOINT = `${API_BASE_URL}/beauty-score`;
+const DELETE_PERSON_ENDPOINT = `${API_BASE_URL}/api/delete-person`;
 
 // Custom Dropdown Component
 const CustomDropdown = ({ value, options, onChange, placeholder = 'Select an option...' }) => {
@@ -243,7 +244,7 @@ const SAMPLE_CARDS = [
 ];
 
 // Swipeable Card Component - matches ProfileCard format exactly
-const SwipeableCard = ({ card, onSwipe, isRevealed, isActive, onFlip, attractivenessScore }) => {
+const SwipeableCard = ({ card, onSwipe, isRevealed, isActive, onFlip, attractivenessScore, onDelete = null }) => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [rotation, setRotation] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -662,6 +663,22 @@ const SwipeableCard = ({ card, onSwipe, isRevealed, isActive, onFlip, attractive
           className="absolute w-full h-full backface-hidden rounded-3xl overflow-hidden shadow-2xl border-2 border-white/20"
           style={{ backfaceVisibility: 'hidden' }}
         >
+          {/* Delete button - only show when card is revealed and active */}
+          {isRevealed && isActive && onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`Delete ${card.name} from this school? This will remove them from future packs.`)) {
+                  onDelete(card);
+                }
+              }}
+              className="absolute top-4 right-4 z-50 w-12 h-12 rounded-full bg-red-500/90 hover:bg-red-600 text-white flex items-center justify-center text-xl font-bold transition-all duration-200 hover:scale-110 shadow-lg backdrop-blur-sm cursor-pointer"
+              title={`Delete ${card.name} from school`}
+            >
+              🗑️
+            </button>
+          )}
+          
           {/* Card content */}
           <div className="relative h-full flex flex-col" style={getScoreGradientStyle(score)}>
             {/* Profile Image */}
@@ -790,7 +807,8 @@ const PackOpening = ({
   cards: cardsProp = null,
   fetchError = null,
   onFetchNewPack = null,
-  genderPreference = null
+  genderPreference = null,
+  currentSchoolName = null // Track the current school name for delete operations
 }) => {
   const [packOpened, setPackOpened] = useState(false);
   const [currentPack, setCurrentPack] = useState([]);
@@ -803,19 +821,25 @@ const PackOpening = ({
   const [showCitySelection, setShowCitySelection] = useState(false);
   const [selectedCity, setSelectedCity] = useState('');
   const [isFetchingNewPack, setIsFetchingNewPack] = useState(false);
+  const [currentSchool, setCurrentSchool] = useState(currentSchoolName); // Track current school for delete operations
   const fetchRequestIdRef = useRef(0);
   const packCreatedRef = useRef(false); // Track if pack has been created for current scoring session
+  
+  // Update currentSchool when prop changes
+  useEffect(() => {
+    if (currentSchoolName) {
+      setCurrentSchool(currentSchoolName);
+    }
+  }, [currentSchoolName]);
 
   const cityOptions = [
-    'Toronto',
-    'Ottawa',
-    'New York',
-    'San Francisco',
-    'London',
-    'Montreal',
-    'Waterloo',
-    'Guelph',
-    'Kingston'
+    'UC Irvine',
+    'UC Riverside',
+    'UCLA',
+    'UBC',
+    'UWaterloo',
+    'NYU',
+    'Stanford'
   ];
 
   const cardsPool = useMemo(() => {
@@ -917,9 +941,11 @@ const PackOpening = ({
         setAttractivenessScores({});
         setIsScoring(false);
         setIsScoringPool(false);
-        setShowCitySelection(false);
-        setSelectedCity('');
+        setShowCitySelection(false); // Hide city selection when new pack arrives
+        setSelectedCity(''); // Reset selected city
+        // Keep currentSchool - don't reset it, it's set when fetching new pack
         packCreatedRef.current = false; // Reset pack creation flag
+        console.log('🔄 Reset pack state for new cards, showCitySelection set to false');
         
         // Update refs
         prevCardsLengthRef.current = currentLength;
@@ -937,19 +963,27 @@ const PackOpening = ({
   
   // Auto-open pack when cardsPool is ready and we have new cards
   useEffect(() => {
-    if (shouldAutoOpenRef.current && cardsPool.length > 0 && !packOpened) {
-      console.log('🚀 Auto-opening pack with', cardsPool.length, 'cards');
+    if (shouldAutoOpenRef.current && cardsPool.length > 0 && !packOpened && !isScoringPool) {
+      console.log('🚀 Auto-opening pack with', cardsPool.length, 'cards', {
+        shouldAutoOpen: shouldAutoOpenRef.current,
+        cardsPoolLength: cardsPool.length,
+        packOpened,
+        isScoringPool
+      });
       shouldAutoOpenRef.current = false;
       // Small delay to ensure state is ready and cardsPool is fully updated
       const timer = setTimeout(() => {
-        if (cardsPool.length > 0) {
+        if (cardsPool.length > 0 && !packOpened) {
           console.log('📦 Opening pack now...');
           openPack();
         } else {
-          console.warn('⚠️ Cards pool is empty, cannot open pack');
+          console.warn('⚠️ Cards pool is empty or pack already opened, cannot open pack', {
+            cardsPoolLength: cardsPool.length,
+            packOpened
+          });
           // Retry once more after a longer delay
           setTimeout(() => {
-            if (cardsPool.length > 0) {
+            if (cardsPool.length > 0 && !packOpened) {
               console.log('🔄 Retrying pack open...');
               openPack();
             }
@@ -959,7 +993,7 @@ const PackOpening = ({
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardsPool.length, packOpened]);
+  }, [cardsPool.length, packOpened, isScoringPool]);
 
   const fetchAttractivenessScores = useCallback(async (packCards, requestId, isPoolScoring = false) => {
     // Note: isScoringPool/isScoring should be set BEFORE calling this function
@@ -1309,7 +1343,13 @@ const PackOpening = ({
       }
       if (nextIndex >= currentPack.length) {
         // All cards processed - show city selection
+        console.log('✅ Pack complete! Showing city selection overlay', {
+          currentIndex: nextIndex,
+          packLength: currentPack.length
+        });
         setShowCitySelection(true);
+        setSelectedCity(''); // Reset selected city for new selection
+        console.log('✅ City selection state set to true');
       }
       return nextIndex;
     });
@@ -1348,16 +1388,18 @@ const PackOpening = ({
       return;
     }
     
-    console.log('🌍 Fetching new pack for city:', city, 'with gender preference:', genderPreference);
+    console.log('🌍 Fetching new pack for school:', city, 'with gender preference:', genderPreference);
     setIsFetchingNewPack(true);
-    setShowCitySelection(false);
+    setShowCitySelection(false); // Hide city selection while fetching
+    setSelectedCity(''); // Reset selected city
+    setCurrentSchool(city); // Store the current school for delete operations
     
     try {
-      // Pass both city and gender preference to the fetch function
+      // Pass both city (school) and gender preference to the fetch function
       await onFetchNewPack(city, genderPreference);
       console.log('✅ New pack fetched successfully, waiting for cards to update...');
-      // Force the shouldAutoOpen flag to ensure pack opens
-      shouldAutoOpenRef.current = true;
+      // The useEffect will detect new cards and auto-open the pack
+      // No need to manually set shouldAutoOpenRef here - the cardsProp useEffect will handle it
     } catch (error) {
       console.error('❌ Error fetching new pack:', error);
       setShowCitySelection(true); // Show city selection again on error
@@ -1372,13 +1414,84 @@ const PackOpening = ({
     // Don't auto-advance - user must click the button to open new pack
   };
 
+  const handleDeletePerson = useCallback(async (card) => {
+    if (!currentSchool || !card?.name) {
+      console.warn('⚠️ Cannot delete person: missing school or card name', { currentSchool, cardName: card?.name });
+      return;
+    }
+
+    const personName = card.name.trim();
+    const schoolName = currentSchool.trim();
+
+    console.log('🗑️ Deleting person from school:', { personName, schoolName });
+
+    try {
+      const response = await fetch(DELETE_PERSON_ENDPOINT, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: personName,
+          school: schoolName
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        throw new Error(errorData.detail || `Request failed with status ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Person deleted successfully:', result);
+
+      // Remove the card from the current pack
+      setCurrentPack((prevPack) => {
+        const updatedPack = prevPack.filter((c) => c.id !== card.id);
+        console.log(`🗑️ Removed card from pack: ${prevPack.length} → ${updatedPack.length}`);
+        return updatedPack;
+      });
+
+      // Also remove from cardsPool by updating cardsProp (this will be handled by parent)
+      // For now, we'll just remove from the current pack display
+      
+      // If we deleted the current card, move to next card
+      if (currentCardIndex < currentPack.length && currentPack[currentCardIndex]?.id === card.id) {
+        setCurrentCardIndex((prev) => {
+          const nextIndex = prev + 1;
+          if (nextIndex >= currentPack.length - 1) {
+            // If we're at the last card, show city selection
+            setShowCitySelection(true);
+          }
+          return nextIndex;
+        });
+      }
+
+      // Add to roster exclusion so they don't appear in future packs
+      const rosterNames = getRosterNames();
+      const normalizedName = personName.toLowerCase();
+      if (!rosterNames.has(normalizedName)) {
+        rosterNames.add(normalizedName);
+        try {
+          localStorage.setItem('roster-names', JSON.stringify([...rosterNames]));
+          console.log(`➕ Added ${personName} to roster exclusion (deleted from school)`);
+        } catch (err) {
+          console.error('Failed to update roster exclusion:', err);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error deleting person:', error);
+      alert(`Failed to delete person: ${error.message}`);
+    }
+  }, [currentSchool, currentCardIndex, currentPack]);
+
   const currentCard = currentCardIndex < currentPack.length ? currentPack[currentCardIndex] : null;
   const isCurrentCardRevealed = currentCardIndex < currentPack.length && revealedCards.includes(currentCardIndex);
   const hasMoreCards = currentCardIndex < currentPack.length - 1;
   const isPackComplete = currentCardIndex >= currentPack.length;
 
   return (
-    <div className="h-screen w-screen bg-black text-white overflow-hidden fixed inset-0">
+    <div className="h-screen w-screen bg-black text-white overflow-hidden fixed inset-0" style={{ top: '80px', height: 'calc(100vh - 80px)' }}>
       {/* Starfield Background */}
       <div className="absolute inset-0 z-0">
         <Particles
@@ -1401,6 +1514,8 @@ const PackOpening = ({
             currentPackLength: currentPack.length, 
             isScoring, 
             isScoringPool,
+            showCitySelection,
+            selectedCity,
             showing: (isScoring || isScoringPool) ? 'loading' : !packOpened ? 'button' : packOpened && currentPack.length > 0 ? 'pack' : 'unknown'
           });
           return null;
@@ -1560,42 +1675,44 @@ const PackOpening = ({
                         handleCardFlip(index);
                       }}
                       attractivenessScore={attractivenessScores[card.id]}
+                      onDelete={handleDeletePerson}
                     />
                   </div>
                 );
               })}
 
-              {/* City selection overlay when pack is complete */}
-              {showCitySelection && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-50">
-                  <div className="text-center space-y-8 max-w-2xl px-6">
-                    <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 drop-shadow-2xl">
-                      Pack Complete!
-                    </h2>
-                    <p className="text-xl md:text-2xl mb-8 text-white/80 drop-shadow-lg">
-                      Choose a city to open another pack
-                    </p>
-                    <div className="max-w-md mx-auto">
-                      <CustomDropdown
-                        value={selectedCity}
-                        options={cityOptions}
-                        onChange={handleCitySelect}
-                        placeholder="Select a city..."
-                      />
-                    </div>
-                    {selectedCity && (
-                      <button
-                        onClick={() => handleFetchNewPack(selectedCity)}
-                        disabled={isFetchingNewPack}
-                        className="mt-6 px-12 py-4 bg-gradient-to-r from-pink-500 via-purple-500 to-pink-600 text-white rounded-full text-xl font-semibold hover:scale-105 transition-transform shadow-lg shadow-pink-500/50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        {isFetchingNewPack ? 'Loading...' : 'Open New Pack'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
+            
+            {/* City selection overlay when pack is complete - outside card stack */}
+            {showCitySelection && (
+              <div className="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-[200]" style={{ top: '80px', height: 'calc(100vh - 80px)' }}>
+                <div className="text-center space-y-8 max-w-2xl px-6">
+                  <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 drop-shadow-2xl">
+                    Pack Complete!
+                  </h2>
+                  <p className="text-xl md:text-2xl mb-8 text-white/80 drop-shadow-lg">
+                    Choose a school to open another pack
+                  </p>
+                  <div className="max-w-md mx-auto">
+                    <CustomDropdown
+                      value={selectedCity}
+                      options={cityOptions}
+                      onChange={handleCitySelect}
+                      placeholder="Select a school..."
+                    />
+                  </div>
+                  {selectedCity && (
+                    <button
+                      onClick={() => handleFetchNewPack(selectedCity)}
+                      disabled={isFetchingNewPack}
+                      className="mt-6 px-12 py-4 bg-gradient-to-r from-pink-500 via-purple-500 to-pink-600 text-white rounded-full text-xl font-semibold hover:scale-105 transition-transform shadow-lg shadow-pink-500/50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      {isFetchingNewPack ? 'Loading...' : 'Open New Pack'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         ) : null}
       </div>

@@ -1187,3 +1187,128 @@ async def find_social_profiles(request: FindSocialsRequest) -> FindSocialsRespon
 
   return FindSocialsResponse(profiles=potential_profiles)
 
+
+class DeletePersonRequest(BaseModel):
+  name: str = Field(..., min_length=1, max_length=200)
+  school: str = Field(..., min_length=1, max_length=200)
+
+
+class DeletePersonResponse(BaseModel):
+  success: bool
+  message: str
+  deleted_count: int
+
+
+@app.delete("/api/delete-person", response_model=DeletePersonResponse)
+async def delete_person_from_school(request: DeletePersonRequest) -> DeletePersonResponse:
+  """Delete a person by name from a school's cached search results."""
+  if mongo_collection is None:
+    raise HTTPException(status_code=500, detail="MongoDB is not configured.")
+
+  trimmed_school = request.school.strip()
+  trimmed_name = request.name.strip()
+
+  if not trimmed_school or not trimmed_name:
+    raise HTTPException(status_code=400, detail="Both school and name must be provided.")
+
+  # Find the cached document for this school
+  cached_document = await mongo_collection.find_one(
+    {"query": trimmed_school, "response": {"$exists": True}},
+    sort=[("created_at", -1)]
+  )
+
+  if not cached_document:
+    return DeletePersonResponse(
+      success=False,
+      message=f"No cached data found for school: {trimmed_school}",
+      deleted_count=0
+    )
+
+  stored_response = cached_document.get("response", {})
+  if not isinstance(stored_response, dict):
+    return DeletePersonResponse(
+      success=False,
+      message="Invalid cached data structure",
+      deleted_count=0
+    )
+
+  stored_rows = stored_response.get("csv_data", [])
+  if not isinstance(stored_rows, list):
+    return DeletePersonResponse(
+      success=False,
+      message="Invalid csv_data structure",
+      deleted_count=0
+    )
+
+  # Normalize the name for comparison (case-insensitive)
+  normalized_name = trimmed_name.lower().strip()
+  
+  # Filter out rows matching the name
+  # Check multiple name fields that might contain the person's name
+  original_count = len(stored_rows)
+  filtered_rows = []
+  deleted_count = 0
+  
+  for row in stored_rows:
+    if not isinstance(row, dict):
+      filtered_rows.append(row)
+      continue
+    
+    # Check various name fields
+    name_fields = ["fullName", "name", "profileFullName", "profileName", "firstName", "lastName"]
+    row_name = None
+    
+    for field in name_fields:
+      value = row.get(field)
+      if isinstance(value, str) and value.strip():
+        row_name = value.strip()
+        break
+    
+    # If no single field has the name, try combining first and last name
+    if not row_name:
+      first_name = row.get("firstName") or row.get("givenName") or ""
+      last_name = row.get("lastName") or row.get("familyName") or ""
+      if first_name or last_name:
+        row_name = f"{first_name} {last_name}".strip()
+    
+    # Compare normalized names
+    if row_name and row_name.lower().strip() == normalized_name:
+      deleted_count += 1
+      logger.info(f"Deleting person '{trimmed_name}' from school '{trimmed_school}'")
+      continue  # Skip this row (don't add to filtered_rows)
+    
+    filtered_rows.append(row)
+
+  if deleted_count == 0:
+    return DeletePersonResponse(
+      success=False,
+      message=f"Person '{trimmed_name}' not found in cached data for school '{trimmed_school}'",
+      deleted_count=0
+    )
+
+  # Update the cached document with filtered rows
+  updated_response = dict(stored_response)
+  updated_response["csv_data"] = filtered_rows
+  updated_response["csv_row_count"] = len(filtered_rows)
+  updated_response["total_csv_row_count"] = len(filtered_rows)
+
+  # Update the document in MongoDB
+  update_result = await mongo_collection.update_one(
+    {"_id": cached_document["_id"]},
+    {"$set": {"response": updated_response}}
+  )
+
+  if update_result.modified_count > 0:
+    logger.info(f"Successfully deleted {deleted_count} person(s) named '{trimmed_name}' from school '{trimmed_school}'")
+    return DeletePersonResponse(
+      success=True,
+      message=f"Successfully deleted {deleted_count} person(s) named '{trimmed_name}' from school '{trimmed_school}'",
+      deleted_count=deleted_count
+    )
+  else:
+    return DeletePersonResponse(
+      success=False,
+      message="Failed to update cached data",
+      deleted_count=0
+    )
+

@@ -298,7 +298,7 @@ const Roster = ({ likedCards, onRemoveCard }) => {
                         e.stopPropagation();
                         handleRemoveClick(card);
                       }}
-                      className="absolute top-4 right-4 z-50 w-10 h-10 rounded-full bg-red-500/80 hover:bg-red-600 text-white flex items-center justify-center text-lg font-bold transition-all duration-200 hover:scale-110 shadow-lg"
+                      className="absolute top-4 right-4 z-50 w-10 h-10 rounded-full bg-red-500/80 hover:bg-red-600 text-white flex items-center justify-center text-lg font-bold transition-all duration-200 hover:scale-110 shadow-lg cursor-pointer"
                       title="Remove from roster"
                     >
                       🗑️
@@ -311,7 +311,7 @@ const Roster = ({ likedCards, onRemoveCard }) => {
                           e.stopPropagation();
                           setExpandedCardId(null);
                         }}
-                        className="absolute top-4 left-4 z-50 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center text-xl font-bold transition-all duration-200 hover:scale-110"
+                        className="absolute top-4 left-4 z-50 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center text-xl font-bold transition-all duration-200 hover:scale-110 cursor-pointer"
                       >
                         ✕
                       </button>
@@ -501,7 +501,7 @@ const Roster = ({ likedCards, onRemoveCard }) => {
                           e.stopPropagation();
                           setExpandedCardId(null);
                         }}
-                        className="absolute top-4 left-4 z-50 w-10 h-10 rounded-full bg-black/70 hover:bg-black/90 text-white flex items-center justify-center text-xl font-bold transition-all duration-200 hover:scale-110 shadow-lg"
+                        className="absolute top-4 left-4 z-50 w-10 h-10 rounded-full bg-black/70 hover:bg-black/90 text-white flex items-center justify-center text-xl font-bold transition-all duration-200 hover:scale-110 shadow-lg cursor-pointer"
                       >
                         ✕
                       </button>
@@ -616,7 +616,7 @@ const Roster = ({ likedCards, onRemoveCard }) => {
                               fetchAIOverview(expandedCard);
                             }}
                             disabled={loadingAI}
-                            className="w-full mb-3 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-semibold hover:from-purple-600 hover:to-pink-600 transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50"
+                            className="w-full mb-3 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-semibold hover:from-purple-600 hover:to-pink-600 transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                           >
                             {loadingAI ? '🤖 Generating AI Insights...' : '✨ Get AI Overview'}
                           </button>
@@ -657,7 +657,7 @@ const Roster = ({ likedCards, onRemoveCard }) => {
                                 setShowSatirical(prev => ({ ...prev, [expandedCard.id]: !prev[expandedCard.id] }));
                               }}
                               disabled={loadingSatirical}
-                              className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-red-600 transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50"
+                              className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-red-600 transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                             >
                               {loadingSatirical ? '😄 Generating Roasts...' : showSatirical[expandedCard.id] ? '😏 Hide Satirical Insights' : '😂 Show Satirical Insights'}
                             </button>
@@ -712,7 +712,7 @@ const Roster = ({ likedCards, onRemoveCard }) => {
                                     e.stopPropagation();
                                     handleRemoveClick(expandedCard);
                                   }}
-                                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-full font-semibold hover:from-red-600 hover:to-red-700 transition-all duration-200 hover:scale-105 shadow-lg"
+                                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-full font-semibold hover:from-red-600 hover:to-red-700 transition-all duration-200 hover:scale-105 shadow-lg cursor-pointer"
                                 >
                                   <span>🗑️</span>
                                   <span>Remove from Roster</span>
@@ -730,7 +730,7 @@ const Roster = ({ likedCards, onRemoveCard }) => {
                               fetchSocialProfiles(expandedCard);
                             }}
                             disabled={loadingSocials}
-                            className="w-full mb-3 px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-xl font-semibold hover:from-cyan-600 hover:to-blue-600 transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50"
+                            className="w-full mb-3 px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-xl font-semibold hover:from-cyan-600 hover:to-blue-600 transition-all duration-200 hover:scale-105 shadow-lg disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                           >
                             {loadingSocials ? '🔍 Searching...' : `🌐 More ways to reach ${expandedCard.name.split(' ')[0]}`}
                           </button>
@@ -795,13 +795,13 @@ const Roster = ({ likedCards, onRemoveCard }) => {
               <div className="flex gap-4 justify-center">
                 <button
                   onClick={cancelRemove}
-                  className="px-6 py-3 bg-white/10 text-white rounded-full font-semibold hover:bg-white/20 transition-all duration-200 hover:scale-105"
+                  className="px-6 py-3 bg-white/10 text-white rounded-full font-semibold hover:bg-white/20 transition-all duration-200 hover:scale-105 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmRemove}
-                  className="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-full font-semibold hover:from-red-600 hover:to-red-700 transition-all duration-200 hover:scale-105 shadow-lg"
+                  className="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-full font-semibold hover:from-red-600 hover:to-red-700 transition-all duration-200 hover:scale-105 shadow-lg cursor-pointer"
                 >
                   Remove
                 </button>
