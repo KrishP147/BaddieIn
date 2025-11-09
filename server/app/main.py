@@ -308,6 +308,57 @@ def _filter_rows_by_gender(rows: list[dict[str, Any]], gender: Literal["woman", 
   return filtered
 
 
+def _filter_rows_by_query(rows: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+  """Filter rows to ensure at least one field contains query keywords."""
+  if not query or not query.strip():
+    return rows
+  
+  # Normalize query: lowercase and split into words
+  query_lower = query.strip().lower()
+  query_words = [word.strip() for word in query_lower.split() if word.strip()]
+  
+  if not query_words:
+    return rows
+  
+  filtered: list[dict[str, Any]] = []
+  for row in rows:
+    # Check relevant fields for query match
+    fields_to_check = [
+      "location",
+      "locationName",
+      "headline",
+      "occupation",
+      "company",
+      "currentCompany",
+      "fullName",
+      "name",
+      "profileFullName",
+      "profileName",
+      "bio",
+      "summary",
+      "about",
+      "description"
+    ]
+    
+    # Combine all field values into a searchable string
+    searchable_text = " ".join(
+      str(row.get(key, "")).lower()
+      for key in fields_to_check
+      if row.get(key)
+    )
+    
+    # Check if any query word appears in the searchable text
+    matches_query = any(word in searchable_text for word in query_words)
+    
+    if matches_query:
+      filtered.append(row)
+    else:
+      logger.debug("Filtered out row (no query match): %s", row.get("fullName") or row.get("name") or "unknown")
+  
+  logger.info("Query filter: %d rows -> %d rows (query: '%s')", len(rows), len(filtered), query)
+  return filtered
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
   global mongo_client, mongo_collection
@@ -369,7 +420,9 @@ async def phantombuster_search_cache(
   if cached_document and isinstance(cached_document.get("response"), dict):
     stored_response = dict(cached_document["response"])
     stored_rows = stored_response.get("csv_data") or []
-    filtered_rows = _filter_rows_by_gender(list(stored_rows), gender)
+    # Apply query filter to cached results as well (in case old data doesn't have filter applied)
+    filtered_rows = _filter_rows_by_query(list(stored_rows), trimmed_query)
+    filtered_rows = _filter_rows_by_gender(filtered_rows, gender)
     filtered_first_row = filtered_rows[0] if filtered_rows else None
 
     response_payload = dict(stored_response)
@@ -486,6 +539,11 @@ async def phantombuster_search_cache(
       csv_rows = list(reader)
       logger.info("Fetched %d rows from PhantomBuster CSV %s for query '%s'", len(csv_rows), csv_url, trimmed_query)
       print(f"[phantombuster-test] query={trimmed_query} csv_url={csv_url} rows={len(csv_rows)}")
+      
+      # Filter rows by query before saving
+      csv_rows = _filter_rows_by_query(csv_rows, trimmed_query)
+      logger.info("After query filter: %d rows remain for query '%s'", len(csv_rows), trimmed_query)
+      
       if csv_rows:
         first_row = csv_rows[0]
         print(f"[phantombuster-test] first_row={first_row}")
