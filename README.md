@@ -1,5 +1,7 @@
 # BaddieIn
 
+Devpost Link: https://devpost.com/software/baddielink
+
 BaddieIn is a tongue-in-cheek “dating scout” that turns LinkedIn searches into collectible trading-card packs. A neon-drenched Vite + React frontend lets you complete a short preference survey, crack open boosted packs of candidates, curate a roster, and even auto-draft slick DMs. A FastAPI backend does the heavy lifting by orchestrating PhantomBuster scrapes, caching results in MongoDB, calling a Hugging Face beauty classifier, and piping everything through Google Gemini for AI-assisted icebreakers.
 
 ## Core Features
